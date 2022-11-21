@@ -1,0 +1,230 @@
+---
+title: "PCOS_Logistic_Regression"
+output: html_document
+date: "2022-11-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries:
+- readxl: Used to read in an excel document since it was not in Comma Separated Value (CSV) format.
+- dplyr: Necessary to manipulate dataframes.
+- ggplot2: Necessary to graph data for analysis.
+- cowplot: Aesthetics for graphs. 
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(car)
+
+```
+
+Load in the data. 
+```{r}
+
+File = "PCOS_data_without_infertility.xlsx"
+
+PCOS_df = read_xlsx(File, sheet = "Full_new")
+```
+
+Use the head function to inspect the data. 
+```{r}
+head(PCOS_df)
+```
+Use str() to check the structure of the data. 
+```{r}
+
+str(PCOS_df)
+
+```
+Use the colnames() function to check the column names to inspect the data. 
+NOTE: Exploratory Data Analysis (EDA) was conducted in a separate Jupyter notebook.
+```{r}
+colnames(PCOS_df)
+```
+Based on initial EDA, I chose to drop `SL. No` and `Patient File No.` due to the need to conduct Logistic Regression. I dropped `Cycle(R/I)` due to lack of information in the original published data dictionary on Kaggle. I dropped `...45` due to the null values and no additional information provided in the data set. 
+```{r}
+#Drop Sl. No., Patient File No., 45, Cycle(R/I)
+
+PCOS_df = select(PCOS_df, -c("Sl. No", "Patient File No.", "Cycle(R/I)", "...45"))
+
+```
+
+Convert all categorical variables to factors for analysis in R. 
+```{r}
+#Convert PCOS, Pregnant, Weight Gain, Hair Growth, Skin Darkening, Hair Loss, Pimples, Fast Food, Reg Exercise to factors. 
+
+PCOS_df$`PCOS (Y/N)` = as.factor(PCOS_df$`PCOS (Y/N)`)
+PCOS_df$`Pregnant(Y/N)` = as.factor(PCOS_df$`Pregnant(Y/N)`)
+PCOS_df$`Weight gain(Y/N)` = as.factor(PCOS_df$`Weight gain(Y/N)`)
+PCOS_df$`hair growth(Y/N)` = as.factor(PCOS_df$`hair growth(Y/N)`)
+PCOS_df$`Skin darkening (Y/N)` = as.factor(PCOS_df$`Skin darkening (Y/N)`)
+PCOS_df$`Hair loss(Y/N)` = as.factor(PCOS_df$`Hair loss(Y/N)`)
+PCOS_df$`Pimples(Y/N)` = as.factor(PCOS_df$`Pimples(Y/N)`)
+PCOS_df$`Fast food (Y/N)` = as.factor(PCOS_df$`Fast food (Y/N)`)
+PCOS_df$`Reg.Exercise(Y/N)` = as.factor(PCOS_df$`Reg.Exercise(Y/N)`)
+
+```
+
+Check to see if factor columns were indeed converted to factors. 
+```{r}
+str(PCOS_df)
+```
+
+`II beta-HCG(mIU/mL)` and `AMH(ng/mL)` were of type character when loaded into R likely due to some incorrect data formatting in the original file that was found in the initial EDA conducted in the Jupyter notebook referenced earlier. Once coerced into integers, we get a warning for these values that they were converted to NAs. 
+```{r}
+#II beta-HCG and AMH to integers. 
+
+PCOS_df$`II    beta-HCG(mIU/mL)` = as.integer(PCOS_df$`II    beta-HCG(mIU/mL)`)
+PCOS_df$`AMH(ng/mL)` = as.integer(PCOS_df$`AMH(ng/mL)`)
+
+```
+Using the summary function, you can check the descriptive statistics for each feature as well as the counts for NA values. 
+```{r}
+#Check for NAs.
+
+summary(PCOS_df)
+```
+Using which is.na functions together we can find which row has the NAs in each column of the dataframe. 
+```{r}
+which(is.na(PCOS_df$`Marraige Status (Yrs)`))
+which(is.na(PCOS_df$`II    beta-HCG(mIU/mL)`))
+which(is.na(PCOS_df$`AMH(ng/mL)`))
+which(is.na(PCOS_df$`Fast food (Y/N)`))
+```
+Before removing the rows from the data set and assigning back to the original data frame to mutate the data frame, I checked these rows and each were split evenly between PCOS and non-PCOS so I decided to drop. 
+```{r}
+PCOS_df = PCOS_df[!is.na(PCOS_df$`Marraige Status (Yrs)`) & !is.na(PCOS_df$`II    beta-HCG(mIU/mL)`) & !is.na(PCOS_df$`AMH(ng/mL)`) & !is.na(PCOS_df$`Fast food (Y/N)`), ]
+```
+
+Use the summary function again to check the NA values were removed. 
+```{r}
+summary(PCOS_df)
+```
+
+Replace Blood Group number representations with the character representation. 
+```{r}
+PCOS_df$`Blood Group` = as.character(PCOS_df$`Blood Group`)
+```
+
+```{r}
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 11] = "A+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 12] = "A-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 13] = "B+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 14] = "B-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 15] = "O+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 16] = "O-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 17] = "AB+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 18] = "AB-"
+```
+
+Create dummy variables for the Blood Group for logistic regression. 
+
+```{r}
+PCOS_df = fastDummies::dummy_cols(PCOS_df, select_columns = "Blood Group", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+```
+
+
+Create the saturated model.
+```{r}
+saturated_model = glm(PCOS_df$`PCOS (Y/N)` ~ ., family ="binomial", data = PCOS_df)
+
+```
+
+Use the Variance Inflation Factor to measure the correlation between the predictor variables. Any predictor variables that have a value over 5, indicates severe correlation. `Weight (Kg)`, `Hip(inch)`, `Height(Cm)`, `Waist(inch)`, `BMI` and `Waist:Hip Ratio` had extremely large values. I will remove all columns except `BMI` since this feature captures the measurements of weight and height in patients. `Blood Group_O+`, `Blood Group_B+` and `Blood Group_A+` all have VIF values over 5. However, these are dummified variables. The first column was dropped when the Blood Groups were dummified, so I am unsure as to why they are correlated.
+```{r}
+vif_values = vif(saturated_model)
+vif_values
+```
+
+Create a logistic regression model that is similar to the `saturated_model` where we use all features except those mentioned above. We will use this as the baseline saturated model. 
+```{r}
+reduced_sat_model = glm(PCOS_df$`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = PCOS_df)
+```
+Check to VIF values after the removal of the above mentioned columns. All columns have values under 5, except the Blood Groups mentioned above. Since these are dummified values, we will keep them in to withhold data integrity for Blood Group. If you lose one column, it will not tell you any information about which Blood Type the patient has. 
+```{r}
+reduced_vif_values = vif(reduced_sat_model)
+reduced_vif_values
+```
+Get the summary statistics for the `reduced_sat_model`. In the summary statistics, it looks like the Deviance Residuals are centered closely around 0 and evenly spread. The `(Intercept)` is significant along with `Pulse rate(bpm)`, `Weight gain(Y/N)`, `hair growth(Y/N)`, `Skin darkening (Y/N)`, `Pimples(Y/N)`, `Follicle No. (L)`, `Follicle No. (R)`.  
+```{r}
+summary(reduced_sat_model)
+```
+
+Plot the residuals to see the spread and center. As from the above summary, it looks like the residuals are centered around 0.  
+```{r}
+scatter.smooth(reduced_sat_model$fit,
+               residuals(reduced_sat_model, type = "deviance"),
+               lpars = list(col = "red"),
+               xlab = "Fitted Probabilities",
+               ylab = "Deviance Residual Values",
+               main = "Residual Plot for\nLogistic Regression of PCOS Data")
+abline(h = 0, lty = 2)
+```
+Remove the most significant feature from the model to see if any other features become significant once removed. 
+```{r}
+no_follicle_no_r = glm(`PCOS (Y/N)` ~ . -`Follicle No. (R)`, family ="binomial", data = PCOS_df)
+```
+Get the summary statistics for `no_follicle_no_r` model. `AIC` is higher than saturated model which indicates that this model performance is worse than the saturated model. However, `Avg. F size (R) (mm)`, `Fast food (Y/N)`, and `Cycle length(days)` now show up as significant features. 
+```{r}
+summary(no_follicle_no_r)
+```
+Create a model that has all the significant features that were shown in both models `no_follicle_no_r` and `reduced_sat_model`. 
+```{r}
+sig_feat_model1 = glm(`PCOS (Y/N)` ~ `Pulse rate(bpm)` + `Cycle length(days)` + `Weight gain(Y/N)` + `hair growth(Y/N)` + 
+                        `Skin darkening (Y/N)` + `Pimples(Y/N)` + `Fast food (Y/N)` + `Follicle No. (L)` + `Follicle No. (R)` + `Avg. F size (R) (mm)`, family ="binomial", data = PCOS_df)
+```
+
+```{r}
+summary(sig_feat_model1)
+```
+Conduct a drop in deviance test from `reduced_sat_model` and `sig_feat_model1`. Because the result is > 0.05, we can conclude that this model is not significant and therefore is an equal predictor for a PCOS diagnosis. 
+```{r}
+pchisq(sig_feat_model1$deviance - reduced_sat_model$deviance, sig_feat_model1$df.residual - reduced_sat_model$df.residual, lower.tail = F)
+```
+
+Create another model with only the significant features. 
+```{r}
+sig_feat_model2 = glm(`PCOS (Y/N)` ~ `Weight gain(Y/N)` + `hair growth(Y/N)` + `Skin darkening (Y/N)` + 
+                         `Pimples(Y/N)` + `Follicle No. (L)` + `Follicle No. (R)`, family ="binomial", data = PCOS_df)
+```
+
+```{r}
+summary(sig_feat_model2)
+```
+The drop in deviance value is still above 0.05 which means both `sig_feat_model2` and `sig_feat_model1` are equally good predictors of PCOS. 
+```{r}
+pchisq(sig_feat_model2$deviance - sig_feat_model1$deviance, sig_feat_model2$df.residual - sig_feat_model1$df.residual, lower.tail = F)
+```
+
+Calculate the AIC, BIC and Pseudo R^2 for each model. The lowest AIC is the `sig_feat_model1`. The lowest BIC is `sig_feat_model2`. The highest Pseudo R^2 value is saturated model which is `reduced_sat_model`. I will use `sig_feat_model2` because it has the least amount of features and has comparable AIC and Pseudo R^2 values. 
+```{r}
+AIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2)
+BIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2)
+1 - reduced_sat_model$deviance/reduced_sat_model$null.deviance
+1 - no_follicle_no_r$deviance/no_follicle_no_r$null.deviance
+1 - sig_feat_model1$deviance/sig_feat_model1$null.deviance
+1 - sig_feat_model2$deviance/sig_feat_model2$null.deviance
+```
+
+
+Checking the prediction accuracy of the `sig_feat_model2`. 
+```{r}
+
+conf.mat = table(PCOS_df$`PCOS (Y/N)`, round(sig_feat_model2$fitted.values))
+sum(diag(conf.mat))/(nrow(PCOS_df))
+
+```
+Check the accuracy of the null model by checking the ratio of PCOS diagnosis in the data set. Because 92% is greater than 67%, we can say that our model is an accurate predictor of PCOS.  
+
+```{r}
+PCOS_df %>% 
+  group_by(`PCOS (Y/N)`) %>% 
+  summarise(ratio = n()/nrow(PCOS_df))
+```
+
+
