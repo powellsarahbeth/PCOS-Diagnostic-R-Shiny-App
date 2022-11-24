@@ -13,14 +13,13 @@ Load libraries:
 - dplyr: Necessary to manipulate dataframes.
 - ggplot2: Necessary to graph data for analysis.
 - cowplot: Aesthetics for graphs. 
+- car: Used for regression. 
 
 ```{r}
 library(readxl)
 library(dplyr)
 library(ggplot2)
 library(cowplot)
-library(car)
-
 ```
 
 Load in the data. 
@@ -128,22 +127,28 @@ Create dummy variables for the Blood Group for logistic regression.
 PCOS_df = fastDummies::dummy_cols(PCOS_df, select_columns = "Blood Group", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
 ```
 
+```{r}
+sample = sample(c(TRUE, FALSE), nrow(PCOS_df), replace = TRUE, prob = c(0.7, 0.3))
+train = PCOS_df[sample, ]
+test = PCOS_df[!sample, ]
+```
+
 
 Create the saturated model.
 ```{r}
-saturated_model = glm(PCOS_df$`PCOS (Y/N)` ~ ., family ="binomial", data = PCOS_df)
-
+saturated_model = glm(`PCOS (Y/N)` ~ ., family ="binomial", data = train)
 ```
 
 Use the Variance Inflation Factor to measure the correlation between the predictor variables. Any predictor variables that have a value over 5, indicates severe correlation. `Weight (Kg)`, `Hip(inch)`, `Height(Cm)`, `Waist(inch)`, `BMI` and `Waist:Hip Ratio` had extremely large values. I will remove all columns except `BMI` since this feature captures the measurements of weight and height in patients. `Blood Group_O+`, `Blood Group_B+` and `Blood Group_A+` all have VIF values over 5. However, these are dummified variables. The first column was dropped when the Blood Groups were dummified, so I am unsure as to why they are correlated.
 ```{r}
+library(car)
 vif_values = vif(saturated_model)
 vif_values
 ```
 
 Create a logistic regression model that is similar to the `saturated_model` where we use all features except those mentioned above. We will use this as the baseline saturated model. 
 ```{r}
-reduced_sat_model = glm(PCOS_df$`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = PCOS_df)
+reduced_sat_model = glm(`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = train)
 ```
 Check to VIF values after the removal of the above mentioned columns. All columns have values under 5, except the Blood Groups mentioned above. Since these are dummified values, we will keep them in to withhold data integrity for Blood Group. If you lose one column, it will not tell you any information about which Blood Type the patient has. 
 ```{r}
@@ -165,9 +170,10 @@ scatter.smooth(reduced_sat_model$fit,
                main = "Residual Plot for\nLogistic Regression of PCOS Data")
 abline(h = 0, lty = 2)
 ```
-Remove the most significant feature from the model to see if any other features become significant once removed. 
+
+Remove the most significant feature `Follicle No. (R)` from the model to see if any other features become significant once removed. Also, removing all high VIF features as mentioned above. 
 ```{r}
-no_follicle_no_r = glm(`PCOS (Y/N)` ~ . -`Follicle No. (R)`, family ="binomial", data = PCOS_df)
+no_follicle_no_r = glm(`PCOS (Y/N)` ~ . -`Follicle No. (R)` -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = train)
 ```
 Get the summary statistics for `no_follicle_no_r` model. `AIC` is higher than saturated model which indicates that this model performance is worse than the saturated model. However, `Avg. F size (R) (mm)`, `Fast food (Y/N)`, and `Cycle length(days)` now show up as significant features. 
 ```{r}
@@ -175,56 +181,104 @@ summary(no_follicle_no_r)
 ```
 Create a model that has all the significant features that were shown in both models `no_follicle_no_r` and `reduced_sat_model`. 
 ```{r}
-sig_feat_model1 = glm(`PCOS (Y/N)` ~ `Pulse rate(bpm)` + `Cycle length(days)` + `Weight gain(Y/N)` + `hair growth(Y/N)` + 
-                        `Skin darkening (Y/N)` + `Pimples(Y/N)` + `Fast food (Y/N)` + `Follicle No. (L)` + `Follicle No. (R)` + `Avg. F size (R) (mm)`, family ="binomial", data = PCOS_df)
+sig_feat_model1 = glm(`PCOS (Y/N)` ~ `Pulse rate(bpm)` + `Cycle length(days)` + `LH(mIU/mL)` +  `Weight gain(Y/N)` + `hair growth(Y/N)` + 
+                        `Skin darkening (Y/N)` + `Pimples(Y/N)` + `Reg.Exercise(Y/N)` + `Fast food (Y/N)` + `Follicle No. (L)` + `Follicle No. (R)` + `Avg. F size (R) (mm)`, family ="binomial", data = train)
 ```
 
 ```{r}
 summary(sig_feat_model1)
 ```
-Conduct a drop in deviance test from `reduced_sat_model` and `sig_feat_model1`. Because the result is > 0.05, we can conclude that this model is not significant and therefore is an equal predictor for a PCOS diagnosis. 
+Conduct a drop in deviance test from `reduced_sat_model` and `sig_feat_model1`. Because the result is > 0.05, we can conclude that this model is not significant and therefore is an equal predictor for a PCOS diagnosis. We will investigate further, but in this case, we would choose to move forward with the simpler model that uses less features to predict PCOS which is `sig_feat_model1`.
 ```{r}
 pchisq(sig_feat_model1$deviance - reduced_sat_model$deviance, sig_feat_model1$df.residual - reduced_sat_model$df.residual, lower.tail = F)
 ```
 
 Create another model with only the significant features. 
 ```{r}
-sig_feat_model2 = glm(`PCOS (Y/N)` ~ `Weight gain(Y/N)` + `hair growth(Y/N)` + `Skin darkening (Y/N)` + 
-                         `Pimples(Y/N)` + `Follicle No. (L)` + `Follicle No. (R)`, family ="binomial", data = PCOS_df)
+sig_feat_model2 = glm(`PCOS (Y/N)` ~ `Cycle length(days)` + `LH(mIU/mL)` + `Weight gain(Y/N)` + `hair growth(Y/N)` + `Skin darkening (Y/N)` + 
+                         `Follicle No. (L)` + `Follicle No. (R)`, family ="binomial", data = train)
 ```
 
 ```{r}
 summary(sig_feat_model2)
 ```
-The drop in deviance value is still above 0.05 which means both `sig_feat_model2` and `sig_feat_model1` are equally good predictors of PCOS. 
+The drop in deviance is <0.05, which means the models are significantly different. We should adopt sig_feat_model2 as the new model to predict PCOS.  
 ```{r}
 pchisq(sig_feat_model2$deviance - sig_feat_model1$deviance, sig_feat_model2$df.residual - sig_feat_model1$df.residual, lower.tail = F)
 ```
+Lastly, just to double check that we have the right model, use step-wise to select the features.Note, I dropped the features that had a value of a VIC of 5 or higher (except for the dummy variables) and marriage status because in the real-world, I don't think this is a great predictor of PCOS.  
+```{r}
+library(MASS)
+model = glm(`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio` - `Marraige Status (Yrs)`, data = train, family = "binomial") %>%
+  stepAIC(trace = FALSE)
+```
+```{r}
+summary(model)
+```
+This is quite lower than 0.05 so this model is significantly different than the model that we just tested. As such, we will use the model found by step-wise feature selection as our new model to predict PCOS. 
+```{r}
+pchisq(sig_feat_model2$deviance - model$deviance, sig_feat_model2$df.residual - model$df.residual, lower.tail = F)
+```
+
 
 Calculate the AIC, BIC and Pseudo R^2 for each model. The lowest AIC is the `sig_feat_model1`. The lowest BIC is `sig_feat_model2`. The highest Pseudo R^2 value is saturated model which is `reduced_sat_model`. I will use `sig_feat_model2` because it has the least amount of features and has comparable AIC and Pseudo R^2 values. 
 ```{r}
-AIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2)
-BIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2)
+AIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
+BIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
 1 - reduced_sat_model$deviance/reduced_sat_model$null.deviance
 1 - no_follicle_no_r$deviance/no_follicle_no_r$null.deviance
 1 - sig_feat_model1$deviance/sig_feat_model1$null.deviance
 1 - sig_feat_model2$deviance/sig_feat_model2$null.deviance
+1 - model$deviance/model$null.deviance
 ```
 
-
-Checking the prediction accuracy of the `sig_feat_model2`. 
+Use the selected `model` to create predictions in the form of probabilities. 
 ```{r}
-
-conf.mat = table(PCOS_df$`PCOS (Y/N)`, round(sig_feat_model2$fitted.values))
-sum(diag(conf.mat))/(nrow(PCOS_df))
-
+model_predictions = predict(model, test, type = "response")
 ```
-Check the accuracy of the null model by checking the ratio of PCOS diagnosis in the data set. Because 92% is greater than 67%, we can say that our model is an accurate predictor of PCOS.  
+
+Set a threshold of 0.5 and convert probabilties to 1 if higher than 0.5 and to 0 if lower than 0.5. 
+```{r}
+model_predictions_threshold = ifelse(model_predictions > 0.5, 1, 0)
+```
+
+Load the caret library to use for the Confusion Matrix function. 
+```{r}
+library(caret)
+```
+Need to convert the model predictions 1s and 0s to factors for the confusion matrix. 
+```{r}
+model_preds = as.factor(model_predictions_threshold)
+```
+
+Use the test actuals to compare to the model predictions. 
+```{r}
+confusionMatrix(test$`PCOS (Y/N)`, model_preds)
+```
+For comparison, let's do the `sig_feat_model2`. 
 
 ```{r}
-PCOS_df %>% 
-  group_by(`PCOS (Y/N)`) %>% 
-  summarise(ratio = n()/nrow(PCOS_df))
+sig_feat_model2_predictions = predict(sig_feat_model2, test, type = "response")
 ```
+
+```{r}
+sig_feat_model2_predictions_threshold = ifelse(sig_feat_model2_predictions > 0.5, 1, 0)
+```
+
+```{r}
+sig_feat_model2_preds = as.factor(sig_feat_model2_predictions_threshold)
+```
+
+```{r}
+confusionMatrix(test$`PCOS (Y/N)`, sig_feat_model2_preds)
+```
+
+
+
+
+
+
+
+
 
 
