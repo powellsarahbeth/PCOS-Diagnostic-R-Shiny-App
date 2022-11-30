@@ -48,7 +48,7 @@ shinyServer(function(input, output) {
   }
     
  output$PCOS_prob = renderText({
-   paste("The patient's probability of a PCOS diagnosis is", round(predict(sig_feat_model2, newdata(), type = "response"), 4) * 100, "%.")
+   paste("The patient's probability of a PCOS diagnosis is", round(predict(sig_feat_model2, newdata(), type = "response"), 4) * 100, "%")
  })
   
 
@@ -65,7 +65,7 @@ shinyServer(function(input, output) {
  output$PCOS_Cycle_Hist = plotly::renderPlotly({
    ggplot(data = PCOS_df, aes(x = `Cycle length(days)`, fill = `PCOS (Y/N)`)) + 
    geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
-   geom_vline(aes(xintercept = input$Cycle_Length), color = "coral", linetype = "dashed", linewidth = 1) +
+   geom_vline(aes(xintercept = input$Cycle_Length), color = "#f3969a", linetype = "dashed", linewidth = 1) +
    scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
    xlab("Cycle Length") + 
    ylab("Frequency of Cycle Length") + 
@@ -76,7 +76,7 @@ shinyServer(function(input, output) {
  output$LH_Hist = plotly::renderPlotly({
    ggplot(data = PCOS_df, aes(x = `LH(mIU/mL)`, fill = `PCOS (Y/N)`)) + 
    geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
-   geom_vline(aes(xintercept = input$LH), color = "coral", linetype = "dashed", size = 1) +
+   geom_vline(aes(xintercept = input$LH), color = "#f3969a", linetype = "dashed", size = 1) +
    scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
    xlab("LH IU/mL") + 
    ylab("Frequency of LH Levels") + 
@@ -87,7 +87,7 @@ shinyServer(function(input, output) {
  output$Follicle_Left = plotly::renderPlotly({
    ggplot(data = PCOS_df, aes(x = `Follicle No. (L)`, fill = `PCOS (Y/N)`)) + 
    geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
-   geom_vline(aes(xintercept = input$Follicle_L), color = "coral", linetype = "dashed", size = 1) +
+   geom_vline(aes(xintercept = input$Follicle_L), color = "#f3969a", linetype = "dashed", size = 1) +
    scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
    xlab("Follicle No. (L)") + 
    ylab("Frequency of Follicles Found in Left Ovary") + 
@@ -98,7 +98,7 @@ shinyServer(function(input, output) {
  output$Follicle_Right = plotly::renderPlotly({
    ggplot(data = PCOS_df, aes(x = `Follicle No. (R)`, fill = `PCOS (Y/N)`)) + 
    geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
-   geom_vline(aes(xintercept = input$Follicle_R), color = "coral", linetype = "dashed", size = 1) +
+   geom_vline(aes(xintercept = input$Follicle_R), color = "#f3969a", linetype = "dashed", size = 1) +
    scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
    xlab("Follicle No. (R)") + 
    ylab("Frequency of Follicles Found in Right Ovary") + 
@@ -109,7 +109,7 @@ shinyServer(function(input, output) {
  output$Weight_Gain = plotly::renderPlotly({
    ggplot(data = PCOS_df, aes(y = `Weight gain(Y/N)`, fill = `PCOS (Y/N)`)) + 
    geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
-   geom_hline(aes(yintercept = as.numeric(input$weight_gain) + 1), color = "coral", linetype = "dashed", size = 1) +
+   geom_hline(aes(yintercept = as.numeric(input$weight_gain) + 1), color = "#f3969a", linetype = "dashed", size = 1) +
    scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
    xlab("# of Patients") + 
    ylab("Weight Gain") + 
@@ -120,23 +120,29 @@ shinyServer(function(input, output) {
 output$Hair_Growth = plotly::renderPlotly({  
    ggplot(data = PCOS_df, aes(y = `hair growth(Y/N)`, fill = `PCOS (Y/N)`)) + 
    geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
-   geom_hline(aes(yintercept = as.numeric(input$hair_growth) + 1), color = "coral", linetype = "dashed", size = 1) +
-   scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+   geom_hline(aes(yintercept = as.numeric(input$hair_growth) + 1), color = "#f3969a", linetype = "dashed", size = 1) +
+   scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) +
    xlab("# of Patients") + 
    ylab("Hair Growth") + 
    ggtitle("Number of Patients Experiencing Hair Growth") + 
    labs(fill = "")
 })
+
  
 output$Skin_Darkening = plotly::renderPlotly({
   ggplot(data = PCOS_df, aes(y = `Skin darkening (Y/N)`, fill = `PCOS (Y/N)`)) + 
   geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
-  geom_hline(aes(yintercept = as.numeric(input$skin_darkening) + 1), color = "coral", linetype = "dashed", size = 1) +
+  geom_hline(aes(yintercept = as.numeric(input$skin_darkening) + 1), color = "#f3969a", linetype = "dashed", size = 1) +
   scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
   xlab("# of Patients") + 
   ylab("Skin Darkening") + 
   ggtitle("Number of Patients Experiencing Skin Darkening") + 
   labs(fill = "")
+})
+
+observeEvent(input$show_about,{
+  showModal(modalDialog("The probability of a patient having Polycystic Ovarian Syndrome (PCOS) is calculated using a Logistic Regression model with 91.36% Accuracy, 92.66% Sensitivity and 88.69% Specificity.
+                        The data used for modelling was collected from 10 different hospital across Kerala, India. This tool was built for exploratory and educational purposes only.", title = "About"))
 })
 
 

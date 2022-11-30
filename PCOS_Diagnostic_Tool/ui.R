@@ -2,7 +2,7 @@
 # Define UI for application that takes patients symptoms and blood test results 
 #to determine the probability of Poly cystic Ovarian Syndrome. 
 
-shinyUI(fluidPage(
+shinyUI(fixedPage(
   theme = bs_theme(version = 4, bootswatch = "minty"),
 
     # Application title
@@ -24,9 +24,12 @@ shinyUI(fluidPage(
   
     hr(), 
       
-      fluidRow(h4(strong(textOutput("PCOS_prob")), align = "center"),
+      fixedRow(
         
-        column(3,
+        column(12, h4(strong(textOutput("PCOS_prob")), width = 12, align = "center"))),
+        
+        fixedRow(
+          column(6,
         
         radioButtons("weight_gain", 
                      label = p("Has the patient experienced weight gain in the past 6 months?"),
@@ -45,7 +48,7 @@ shinyUI(fluidPage(
         
         ),
         
-        column(6, offset = 1, 
+        column(6, 
         
         sliderInput("LH", label = p("What is the patient's Luteinizing Hormone (LH) IU/mL?"), 
                     min = 0, max = 60, value = 30, step = .1),
@@ -54,7 +57,9 @@ shinyUI(fluidPage(
                     min = 0, max = 30, value = 15, step = 1),
         
         sliderInput("Follicle_R", label = p("In the last ultrasound, how many follicles were found in the right ovary?"), 
-                    min = 0, max = 30, value = 15, step = 1)
+                    min = 0, max = 30, value = 15, step = 1), 
+        
+        actionButton('show_about', "About")
         
         )
         

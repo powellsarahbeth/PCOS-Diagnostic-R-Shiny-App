@@ -5,9 +5,10 @@ library(dplyr)
 library(ggplot2)
 library(plotly)
 
+
 ############################Load Data Frame####################################
- 
-File = "C:\\Users\\sarah\\OneDrive\\Documents\\NYCDS_Bootcamp\\00_Project 2\\PCOS_Diagnostic_Tool\\PCOS_data_without_infertility.xlsx"
+
+File = "PCOS_data_without_infertility.xlsx"
 PCOS_df = read_xlsx(File, sheet = "Full_new")
 
 ############################Clean data frame####################################
@@ -37,22 +38,10 @@ PCOS_df = PCOS_df[!is.na(PCOS_df$`Marraige Status (Yrs)`) &
                     !is.na(PCOS_df$`Fast food (Y/N)`), ]
 
 #Impute outliers with the median. 
-PCOS_df[453, 16] = median(PCOS_df$`LH(mIU/mL)`)
-PCOS_df[295, 6] = median(PCOS_df$`Pulse rate(bpm)`)
-PCOS_df[222, 6] = median(PCOS_df$`Pulse rate(bpm)`)
-PCOS_df[327, 17] = median(PCOS_df$`FSH/LH`)
-PCOS_df[112,13] = median(PCOS_df$`I   beta-HCG(mIU/mL)`)
-PCOS_df[213, 13] = median(PCOS_df$`II    beta-HCG(mIU/mL)`)
-PCOS_df[251, 13] = median(PCOS_df$`II    beta-HCG(mIU/mL)`)
+LH_boxplot = boxplot(PCOS_df$`LH(mIU/mL)`, plot = FALSE)
+LH_outliers = LH_boxplot$out
+PCOS_df$`LH(mIU/mL)`[which(PCOS_df$`LH(mIU/mL)` %in% c(LH_outliers))] = median(PCOS_df$`LH(mIU/mL)`)
 
-TSH_boxplot = boxplot(PCOS_df$`TSH (mIU/L)`, plot = FALSE)
-TSH_outliers = TSH_boxplot$out
-PCOS_df$`TSH (mIU/L)`[which(PCOS_df$`TSH (mIU/L)` %in% c(TSH_outliers))] = median(PCOS_df$`TSH (mIU/L)`)
-AMH_boxplot = boxplot(PCOS_df$`AMH(ng/mL)`, plot = FALSE)
-AMH_outliers = AMH_boxplot$out
-PCOS_df$`AMH(ng/mL)`[which(PCOS_df$`AMH(ng/mL)` %in% c(AMH_outliers))] = median(PCOS_df$`AMH(ng/mL)`)
-PCOS_df[190, 24] = median(PCOS_df$`Vit D3 (ng/mL)`)
-PCOS_df[194, 24] = median(PCOS_df$`Vit D3 (ng/mL)`)
 
 #Convert Blood Group to character and create dummy variables. 
 PCOS_df$`Blood Group` = as.character(PCOS_df$`Blood Group`)
@@ -85,3 +74,4 @@ predicted_data = data.frame(probability_of_PCOS= sig_feat_model2$fitted.values,
                             PCOS = train$`PCOS (Y/N)`)
 predicted_data = predicted_data[order(predicted_data$probability_of_PCOS, decreasing=FALSE), ]
 predicted_data$rank = 1:nrow(predicted_data)
+

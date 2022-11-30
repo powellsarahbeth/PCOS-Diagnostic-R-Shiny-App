@@ -24,7 +24,7 @@ library(cowplot)
 
 Load in the data. 
 ```{r}
-File = "C:\\Users\\sarah\\OneDrive\\Documents\\NYCDS_Bootcamp\\00_Project 2\\PCOS_Diagnostic_Tool\\PCOS_data_without_infertility.xlsx"
+File = ".\\PCOS_data_without_infertility.xlsx"
 PCOS_df = read_xlsx(File, sheet = "Full_new")
 ```
 
@@ -263,15 +263,22 @@ pchisq(sig_feat_model2$deviance - model$deviance, sig_feat_model2$df.residual - 
 
 Calculate the AIC, BIC and Pseudo R^2 for each model. The lowest AIC is the `sig_feat_model1`. The lowest BIC is `sig_feat_model2`. The highest Pseudo R^2 value is saturated model which is `reduced_sat_model`. I will use `sig_feat_model2` because it has the least amount of features and has comparable AIC and Pseudo R^2 values. 
 ```{r}
-AIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
-BIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
-1 - reduced_sat_model$deviance/reduced_sat_model$null.deviance
-1 - no_follicle_no_r$deviance/no_follicle_no_r$null.deviance
-1 - sig_feat_model1$deviance/sig_feat_model1$null.deviance
-1 - sig_feat_model2$deviance/sig_feat_model2$null.deviance
-1 - model$deviance/model$null.deviance
+model_names = c("reduced_sat_model", "no_follicle_no_r", "sig_feat_model1", "sig_feat_model2", "model")
+AIC = AIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
+BIC = BIC(reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
+R_reduced_sat_model = 1 - reduced_sat_model$deviance/reduced_sat_model$null.deviance
+R_no_follicle_r = 1 - no_follicle_no_r$deviance/no_follicle_no_r$null.deviance
+R_sig_feat_model1 = 1 - sig_feat_model1$deviance/sig_feat_model1$null.deviance
+R_sig_feat_model2 = 1 - sig_feat_model2$deviance/sig_feat_model2$null.deviance
+R_model = 1 - model$deviance/model$null.deviance
+R = c(R_reduced_sat_model, R_no_follicle_r, R_sig_feat_model1, R_sig_feat_model2, R_model)
 ```
 
+```{r}
+df1 = data.frame(model_names, R, AIC, BIC)
+df1 = select(df1, -c("df.1"))
+knitr::kable(df1)
+```
 
 Use the selected `model` to create predictions in the form of probabilities. 
 ```{r}
@@ -319,6 +326,9 @@ sig_feat_model2_preds = as.factor(sig_feat_model2_predictions_threshold)
 confusionMatrix(test$`PCOS (Y/N)`, sig_feat_model2_preds)
 ```
 
+```{r}
+typeof(confusionMatrix(test$`PCOS (Y/N)`, sig_feat_model2_preds))
+```
 
 Structure the data so that we can plot the sigmoid function.  
 ```{r}
@@ -411,12 +421,12 @@ ggplot(data = PCOS_df, aes(x = `Weight gain(Y/N)`, fill = `PCOS (Y/N)`)) +
 
 ggplot(data = PCOS_df, aes(y = `hair growth(Y/N)`, fill = `PCOS (Y/N)`)) + 
   geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
-  geom_hline(aes(yintercept = 2), color = "coral", linetype = "dashed", size = 1) +
+  geom_hline(aes(yintercept = 2, color = "Patient Value"), linetype = "dashed", size = 1) +
   scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
   xlab("# of Patients") + 
   ylab("Hair Growth") + 
   ggtitle("Number of Patients Experiencing Hair Growth") + 
-  labs(fill = "")
+  labs(fill = "", color = NULL)
 ```
 
 ```{r}
