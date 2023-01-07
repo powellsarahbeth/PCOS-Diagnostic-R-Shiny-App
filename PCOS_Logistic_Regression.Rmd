@@ -1,0 +1,489 @@
+---
+title: "PCOS_Logistic_Regression"
+output: html_document
+date: "2022-11-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries:
+- readxl: Used to read in an excel document since it was not in Comma Separated Value (CSV) format.
+- dplyr: Necessary to manipulate dataframes.
+- ggplot2: Necessary to graph data for analysis.
+- cowplot: Aesthetics for graphs. 
+- car: Used for regression. 
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+```
+
+Load in the data. 
+```{r}
+File = ".\\PCOS_data_without_infertility.xlsx"
+PCOS_df = read_xlsx(File, sheet = "Full_new")
+```
+
+Use the head function to inspect the data. 
+```{r}
+head(PCOS_df)
+```
+
+
+Check the structure of the data. 
+```{r}
+str(PCOS_df)
+```
+
+
+Check the column names to inspect the data. 
+NOTE: Exploratory Data Analysis (EDA) was conducted in a separate Jupyter notebook.
+```{r}
+colnames(PCOS_df)
+```
+
+
+Based on initial EDA, I chose to drop `SL. No` and `Patient File No.` due to the need to conduct Logistic Regression. I dropped `Cycle(R/I)` due to lack of information in the original published data dictionary on Kaggle. I dropped `...45` due to the null values and no additional information provided in the data set. 
+```{r}
+PCOS_df = select(PCOS_df, -c("Sl. No", "Patient File No.", "Cycle(R/I)", "...45"))
+```
+
+
+Convert all categorical variables to factors for analysis in R. 
+```{r}
+#Convert PCOS, Pregnant, Weight Gain, Hair Growth, Skin Darkening, Hair Loss, Pimples, Fast Food, Reg Exercise to factors. 
+
+PCOS_df$`PCOS (Y/N)` = as.factor(PCOS_df$`PCOS (Y/N)`)
+PCOS_df$`Pregnant(Y/N)` = as.factor(PCOS_df$`Pregnant(Y/N)`)
+PCOS_df$`Weight gain(Y/N)` = as.factor(PCOS_df$`Weight gain(Y/N)`)
+PCOS_df$`hair growth(Y/N)` = as.factor(PCOS_df$`hair growth(Y/N)`)
+PCOS_df$`Skin darkening (Y/N)` = as.factor(PCOS_df$`Skin darkening (Y/N)`)
+PCOS_df$`Hair loss(Y/N)` = as.factor(PCOS_df$`Hair loss(Y/N)`)
+PCOS_df$`Pimples(Y/N)` = as.factor(PCOS_df$`Pimples(Y/N)`)
+PCOS_df$`Fast food (Y/N)` = as.factor(PCOS_df$`Fast food (Y/N)`)
+PCOS_df$`Reg.Exercise(Y/N)` = as.factor(PCOS_df$`Reg.Exercise(Y/N)`)
+
+```
+
+
+`II beta-HCG(mIU/mL)` and `AMH(ng/mL)` were of type character when loaded into R likely due to some incorrect data formatting in the original file that was found in the initial EDA conducted in the Jupyter notebook referenced earlier. Once coerced into integers, we get a warning for these values that they were converted to NAs. 
+```{r}
+#II beta-HCG and AMH to integers. 
+
+PCOS_df$`II    beta-HCG(mIU/mL)` = as.integer(PCOS_df$`II    beta-HCG(mIU/mL)`)
+PCOS_df$`AMH(ng/mL)` = as.integer(PCOS_df$`AMH(ng/mL)`)
+
+```
+
+
+Using the summary function, you can check the descriptive statistics for each feature as well as the counts for NA values. 
+```{r}
+summary(PCOS_df)
+```
+
+
+Before removing the rows from the data set and assigning back to the original data frame to mutate the data frame, I checked these rows and each were split evenly between PCOS and non-PCOS so I decided to drop. 
+```{r}
+PCOS_df = PCOS_df[!is.na(PCOS_df$`Marraige Status (Yrs)`) & !is.na(PCOS_df$`II    beta-HCG(mIU/mL)`) & !is.na(PCOS_df$`AMH(ng/mL)`) & !is.na(PCOS_df$`Fast food (Y/N)`), ]
+```
+
+
+Use the summary function again to check the NA values were removed. 
+```{r}
+summary(PCOS_df)
+```
+
+
+Replace/impute outliers with median values.Note: Most outliers were kept in the data set to model the abnormal results that are received when a patient is diagnosed with PCOS. 
+```{r}
+PCOS_df[453, 16] = median(PCOS_df$`LH(mIU/mL)`)
+PCOS_df[295, 6] = median(PCOS_df$`Pulse rate(bpm)`)
+PCOS_df[222, 6] = median(PCOS_df$`Pulse rate(bpm)`)
+PCOS_df[327, 17] = median(PCOS_df$`FSH/LH`)
+PCOS_df[112,13] = median(PCOS_df$`I   beta-HCG(mIU/mL)`)
+PCOS_df[213, 13] = median(PCOS_df$`II    beta-HCG(mIU/mL)`)
+PCOS_df[251, 13] = median(PCOS_df$`II    beta-HCG(mIU/mL)`)
+#PCOS_df[327, 15] = median(PCOS_df$`FSH(mIU/mL)`)
+
+TSH_boxplot = boxplot(PCOS_df$`TSH (mIU/L)`, plot = FALSE)
+TSH_outliers = TSH_boxplot$out
+PCOS_df$`TSH (mIU/L)`[which(PCOS_df$`TSH (mIU/L)` %in% c(TSH_outliers))] = median(PCOS_df$`TSH (mIU/L)`)
+
+AMH_boxplot = boxplot(PCOS_df$`AMH(ng/mL)`, plot = FALSE)
+AMH_outliers = AMH_boxplot$out
+PCOS_df$`AMH(ng/mL)`[which(PCOS_df$`AMH(ng/mL)` %in% c(AMH_outliers))] = median(PCOS_df$`AMH(ng/mL)`)
+
+PCOS_df[190, 24] = median(PCOS_df$`Vit D3 (ng/mL)`)
+PCOS_df[194, 24] = median(PCOS_df$`Vit D3 (ng/mL)`)
+```
+
+
+Replace Blood Group number representations with the character representation. 
+```{r}
+PCOS_df$`Blood Group` = as.character(PCOS_df$`Blood Group`)
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 11] = "A+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 12] = "A-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 13] = "B+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 14] = "B-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 15] = "O+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 16] = "O-"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 17] = "AB+"
+PCOS_df["Blood Group"][PCOS_df["Blood Group"] == 18] = "AB-"
+```
+
+
+Create dummy variables for the Blood Group for logistic regression. 
+```{r}
+PCOS_df = fastDummies::dummy_cols(PCOS_df, select_columns = "Blood Group", remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+```
+
+
+Split the data into test and train data sets.
+```{r}
+sample = sample(c(TRUE, FALSE), nrow(PCOS_df), replace = TRUE, prob = c(0.7, 0.3))
+train = PCOS_df[sample, ]
+test = PCOS_df[!sample, ]
+```
+
+
+Create the saturated model.
+```{r}
+saturated_model = glm(`PCOS (Y/N)` ~ ., family ="binomial", data = train)
+```
+
+
+```{r}
+num_cols = unlist(lapply(PCOS_df, is.numeric))
+data_num = PCOS_df[, num_cols]
+cor(data_num)
+```
+
+Use the Variance Inflation Factor to measure the correlation between the predictor variables. Any predictor variables that have a value over 5, indicates severe correlation. `Weight (Kg)`, `Hip(inch)`, `Height(Cm)`, `Waist(inch)`, `BMI` and `Waist:Hip Ratio` had extremely large values. I will remove all columns except `BMI` since this feature captures the measurements of weight and height in patients. `Blood Group_O+`, `Blood Group_B+` and `Blood Group_A+` all have VIF values over 5. However, these are dummified variables. The first column was dropped when the Blood Groups were dummified, so I am unsure as to why they are correlated.
+```{r}
+library(car)
+vif_values = vif(saturated_model)
+vif_values
+```
+
+Create a logistic regression model that is similar to the `saturated_model` where we use all features except those mentioned above. We will use this as the baseline saturated model. 
+```{r}
+reduced_sat_model = glm(`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = train)
+```
+
+
+Check to VIF values after the removal of the above mentioned columns. All columns have values under 5, except the Blood Groups mentioned above. Since these are dummified values, we will keep them in to withhold data integrity for Blood Group. If you lose one column, it will not tell you any information about which Blood Type the patient has. 
+```{r}
+reduced_vif_values = vif(reduced_sat_model)
+reduced_vif_values
+```
+
+
+Get the summary statistics for the `reduced_sat_model`. In the summary statistics, it looks like the Deviance Residuals are centered closely around 0 and evenly spread. The `(Intercept)` is significant along with `Pulse rate(bpm)`, `Weight gain(Y/N)`, `hair growth(Y/N)`, `Skin darkening (Y/N)`, `Pimples(Y/N)`, `Follicle No. (L)`, `Follicle No. (R)`.  
+```{r}
+summary(reduced_sat_model)
+```
+
+Conduct a drop in deviance test. The null hypothesis is the smaller model is sufficient. The alternative hypothesis is that the smaller model is not sufficient. The p-value is 0.1614 which is greater than 0.05 which means we accept the null hypothesis. The `reduced_sat_model` is sufficient. 
+```{r}
+anova(reduced_sat_model, saturated_model, test = "Chisq")
+```
+
+Plot the residuals to see the spread and center. As from the above summary, it looks like the residuals are centered around 0.  
+```{r}
+scatter.smooth(reduced_sat_model$fit,
+               residuals(reduced_sat_model, type = "deviance"),
+               lpars = list(col = "red"),
+               xlab = "Fitted Probabilities",
+               ylab = "Deviance Residual Values",
+               main = "Residual Plot for\nLogistic Regression of PCOS Data")
+abline(h = 0, lty = 2)
+```
+
+
+Remove the most significant feature `Follicle No. (R)` from the model to see if any other features become significant once removed. Also, removing all high VIF features as mentioned above. 
+```{r}
+no_follicle_no_r = glm(`PCOS (Y/N)` ~ . -`Follicle No. (R)` -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio`, family ="binomial", data = train)
+```
+
+
+Get the summary statistics for `no_follicle_no_r` model. `AIC` is higher than saturated model which indicates that this model performance is worse than the saturated model. However, `Avg. F size (R) (mm)`, `Fast food (Y/N)`, and `Cycle length(days)` now show up as significant features. 
+```{r}
+summary(no_follicle_no_r)
+```
+Conduct a drop in deviance test on `no_follicle_no_r` model and the `reduced_sat_model`. The null is that the smaller model is true and the alternative means that the larger model is true. The p-value in this case is very small and less than 0.05 which means we can reject the null meaning that the larger model `reduced_sat_model` is true.  
+```{r}
+anova(no_follicle_no_r, reduced_sat_model, test = "Chisq")
+```
+
+
+Create a model that has all the significant features that were shown in both models `no_follicle_no_r` and `reduced_sat_model`. 
+```{r}
+sig_feat_model1 = glm(`PCOS (Y/N)` ~ `Pulse rate(bpm)` + `Cycle length(days)` + `LH(mIU/mL)` +  `Weight gain(Y/N)` + `hair growth(Y/N)` + 
+                        `Skin darkening (Y/N)` + `Pimples(Y/N)` + `Reg.Exercise(Y/N)` + `Fast food (Y/N)` + `Follicle No. (L)` + `Follicle No. (R)` + `Avg. F size (R) (mm)`, family ="binomial", data = train)
+```
+
+
+```{r}
+summary(sig_feat_model1)
+```
+
+Conduct a drop in deviance test from `reduced_sat_model` and `sig_feat_model1`. The null hypothesis is that the smaller model is true (`sig_feat_model1`) and the alternative is that the larger model is true (`reduced_sat_model`). The p-value is 0.14 which is greater than 0.05, which means we can accept the null that the smaller model is true. `sig_feat_model1`. 
+```{r}
+anova(sig_feat_model1, reduced_sat_model, test = "Chisq")
+```
+
+Create another model with only the significant features. 
+```{r}
+sig_feat_model2 = glm(`PCOS (Y/N)` ~ `Cycle length(days)` + `LH(mIU/mL)` + `Weight gain(Y/N)` + `hair growth(Y/N)` + `Skin darkening (Y/N)` + 
+                         `Follicle No. (L)` + `Follicle No. (R)`, family ="binomial", data = train)
+```
+
+
+```{r}
+summary(sig_feat_model2)
+```
+
+The drop in deviance test results in 0.053 which is greater than our cut off of 0.05. We can adopt `sig_feat_model2` as the new model to predict PCOS as the null hypothesis is true (the smaller model is true). 
+```{r}
+anova(sig_feat_model2, sig_feat_model1, test = "Chisq")
+```
+
+Lastly, just to double check that we have the right model, use step-wise to select the features.Note, I dropped the features that had a value of a VIC of 5 or higher (except for the dummy variables) and marriage status because in the real-world, I don't think this is a great predictor of PCOS.  
+```{r}
+library(MASS)
+model = glm(`PCOS (Y/N)` ~ . -`Weight (Kg)` - `Hip(inch)` - `Height(Cm)` - `Waist(inch)` - `Waist:Hip Ratio` - `Marraige Status (Yrs)`, data = train, family = "binomial") %>%
+  stepAIC(trace = FALSE)
+```
+
+
+```{r}
+summary(model)
+```
+
+NOTE: Because the stepwise selection `model` is not technically a nested model to `sig_feat_model2` we cannot conduct a drop in deviance test to compare these two models. However, we can conduct a drop in deviance test as compared to `saturated_model` and `reduced_sat_model`.
+
+The null hypothesis says that the stepwise selction `model` is true. The alternative hypothesis says that the `saturated_model` is true. The p-value is very large indicating that the null hypothesis is true saying that the stepwise selection `model` is true which is what we expect.
+```{r}
+anova(saturated_model, model, test = "Chisq")
+```
+
+Again, the step-wise selection `model` proves to be true when compared to the `reduced_sat_model`. 
+```{r}
+anova(reduced_sat_model, model, test = "Chisq")
+```
+
+
+Calculate the AIC, BIC and Pseudo R^2 for each model. The lowest AIC is the `sig_feat_model1`. The lowest BIC is `sig_feat_model2`. The highest Pseudo R^2 value is saturated model which is `reduced_sat_model`. I will use `sig_feat_model2` because it has the least amount of features and has comparable AIC and Pseudo R^2 values. 
+```{r}
+Model = c("saturated_model", "reduced_sat_model", "no_follicle_no_r", "sig_feat_model1", "sig_feat_model2", "forwardAIC_model")
+AIC = AIC(saturated_model, reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
+BIC = BIC(saturated_model, reduced_sat_model, no_follicle_no_r, sig_feat_model1, sig_feat_model2, model)
+R_saturated_model = 1 - saturated_model$deviance/saturated_model$null.deviance
+R_reduced_sat_model = 1 - reduced_sat_model$deviance/reduced_sat_model$null.deviance
+R_no_follicle_r = 1 - no_follicle_no_r$deviance/no_follicle_no_r$null.deviance
+R_sig_feat_model1 = 1 - sig_feat_model1$deviance/sig_feat_model1$null.deviance
+R_sig_feat_model2 = 1 - sig_feat_model2$deviance/sig_feat_model2$null.deviance
+R_model = 1 - model$deviance/model$null.deviance
+Psuedo_R_Sq = c(R_saturated_model, R_reduced_sat_model, R_no_follicle_r, R_sig_feat_model1, R_sig_feat_model2, R_model)
+Accuracy = c(0.8766, 0.8896, 0.8701, 0.9221, 0.9026, 0.8896)
+
+```
+
+```{r}
+df1 = data.frame(Model, Psuedo_R_Sq, AIC, BIC, Accuracy)
+df1 = subset(df1, select = -c(df.1))
+print(df1, row.names = FALSE)
+```
+
+
+Use the selected `model` to create predictions in the form of probabilities. 
+```{r}
+model_predictions = predict(model, test, type = "response")
+```
+
+
+Set a threshold of 0.5 and convert probabilities to 1 if higher than 0.5 and to 0 if lower than 0.5. 
+```{r}
+model_predictions_threshold = ifelse(model_predictions > 0.5, 1, 0)
+```
+
+
+Load the caret library to use for the Confusion Matrix function. 
+```{r}
+library(caret)
+```
+
+
+Need to convert the model predictions 1s and 0s to factors for the confusion matrix. 
+```{r}
+model_preds = as.factor(model_predictions_threshold)
+```
+
+
+Use the test observations to compare to the model predictions. 
+```{r}
+confusionMatrix(test$`PCOS (Y/N)`, model_preds)
+```
+Conduct the same process for each model to get the accuracy. 
+###########################################################
+
+Get accuracy for `sig_feat_model1`. 
+```{r}
+sig_feat_model1_predictions = predict(sig_feat_model1, test, type = "response")
+sig_feat_model1_predictions_threshold = ifelse(sig_feat_model1_predictions > 0.5, 1, 0)
+sig_feat_model1_preds = as.factor(sig_feat_model1_predictions_threshold)
+confusionMatrix(test$`PCOS (Y/N)`, sig_feat_model1_preds)
+```
+Get accuracy for `sig_feat_model2`. 
+```{r}
+sig_feat_model2_predictions = predict(sig_feat_model2, test, type = "response")
+sig_feat_model2_predictions_threshold = ifelse(sig_feat_model2_predictions > 0.5, 1, 0)
+sig_feat_model2_preds = as.factor(sig_feat_model2_predictions_threshold)
+confusionMatrix(test$`PCOS (Y/N)`, sig_feat_model2_preds)
+```
+
+
+
+
+Get accuracy for `no_follicle_no_r`. 
+```{r}
+
+no_follicle_no_r_predictions = predict(no_follicle_no_r, test, type = "response")
+no_follicle_no_r_predictions_threshold = ifelse(no_follicle_no_r_predictions > 0.5, 1, 0)
+no_follicle_no_r_preds = as.factor(no_follicle_no_r_predictions_threshold)
+confusionMatrix(test$`PCOS (Y/N)`, no_follicle_no_r_preds)
+```
+
+Get accuracy for `reduced_sat_model`.
+```{r}
+reduced_sat_model_predictions = predict(reduced_sat_model, test, type = "response")
+reduced_sat_model_predictions_threshold = ifelse(reduced_sat_model_predictions > 0.5, 1, 0)
+reduced_sat_model_preds = as.factor(reduced_sat_model_predictions_threshold)
+confusionMatrix(test$`PCOS (Y/N)`, reduced_sat_model_preds)
+```
+Get `saturated_model` accuracy. 
+```{r}
+saturated_model_predictions = predict(saturated_model, test, type = "response")
+saturated_model_predictions_threshold = ifelse(saturated_model_predictions > 0.5, 1, 0)
+saturated_model_preds = as.factor(saturated_model_predictions_threshold)
+confusionMatrix(test$`PCOS (Y/N)`, saturated_model_preds)
+```
+
+
+Structure the data so that we can plot the sigmoid function.  
+```{r}
+predicted_data = data.frame(probability_of_PCOS = sig_feat_model2$fitted.values, PCOS = train$`PCOS (Y/N)`)
+predicted_data = predicted_data[order(predicted_data$probability_of_PCOS, decreasing=FALSE),]
+predicted_data$rank = 1:nrow(predicted_data)
+```
+
+
+Testing to plot a new data point on the sigmoid function for the app. 
+```{r}
+new_data = data.frame(probability_of_PCOS = 0.92012000, PCOS = 1)
+```
+
+
+Plot the sigmoid function. 
+```{r}
+library(cowplot)
+
+ggplot(data = predicted_data, aes(x = rank, y = probability_of_PCOS, color = PCOS)) +
+  geom_point(alpha = 0.6, shape = 4, stroke = 2, position = "identity") +
+  scale_colour_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) +
+  xlab("Ranked Order of Predicted Values") +
+  ylab("Predicted probability of having PCOS") + 
+  ggtitle("Probability Function to Predict PCOS") + 
+  labs(fill = "")
+
+```
+
+Plot the histograms for the app. Use the `geom_vline` with the mean of the data, but in the app use the patient's data point. Create histogram of `Cycle Length (days)`.  
+```{r}
+ggplot(data = PCOS_df, aes(x = `Cycle length(days)`, fill = `PCOS (Y/N)`)) + 
+  geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
+  geom_vline(aes(xintercept = 12), color = "coral", linetype = "dashed", linewidth = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("Cycle Length") + 
+  ylab("Frequency of Cycle Length") + 
+  ggtitle("Histogram of Cycle Lengths") + 
+  labs(fill = "")
+```
+
+Create histogram of `LH(mIU/mL)`. 
+```{r}
+ggplot(data = PCOS_df, aes(x = `LH(mIU/mL)`, fill = `PCOS (Y/N)`)) + 
+  geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
+  geom_vline(aes(xintercept = mean(`LH(mIU/mL)`)), color = "coral", linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("LH IU/mL") + 
+  ylab("Frequency of LH Levels") + 
+  ggtitle("Histogram of Luteinizing Hormone Levels") + 
+  labs(fill = "")
+```
+
+
+```{r}
+ggplot(data = PCOS_df, aes(x = `Follicle No. (L)`, fill = `PCOS (Y/N)`)) + 
+  geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
+  geom_vline(aes(xintercept = mean(`Follicle No. (L)`)), color = "coral", linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("Follicle No. (L)") + 
+  ylab("Frequency of Follicles Found in Left Ovary") + 
+  ggtitle("Histogram of Follicles Found in Left Ovary") + 
+  labs(fill = "")
+```
+
+```{r}
+ggplot(data = PCOS_df, aes(x = `Follicle No. (R)`, fill = `PCOS (Y/N)`)) + 
+  geom_histogram(color="#e9ecef", alpha=0.6, binwidth = 1, position = "identity") +
+  geom_vline(aes(xintercept = mean(`Follicle No. (R)`)), color = "coral", linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("Follicle No. (R)") + 
+  ylab("Frequency of Follicles Found in Right Ovary") + 
+  ggtitle("Histogram of Follicles Found in Right Ovary") + 
+  labs(fill = "")
+```
+
+```{r}
+ggplot(data = PCOS_df, aes(x = `Weight gain(Y/N)`, fill = `PCOS (Y/N)`)) + 
+  geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
+  geom_vline(aes(xintercept = 1 + 1), color = "coral", linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("# of Patients") + 
+  ylab("Weight Gain") + 
+  ggtitle("Number of Patients Experiencing Weight Gain") + 
+  labs(fill = "")
+```
+
+
+```{r}
+
+ggplot(data = PCOS_df, aes(y = `hair growth(Y/N)`, fill = `PCOS (Y/N)`)) + 
+  geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
+  geom_hline(aes(yintercept = 2, color = "Patient Value"), linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("# of Patients") + 
+  ylab("Hair Growth") + 
+  ggtitle("Number of Patients Experiencing Hair Growth") + 
+  labs(fill = "", color = NULL)
+```
+
+```{r}
+
+ggplot(data = PCOS_df, aes(y = `Skin darkening (Y/N)`, fill = `PCOS (Y/N)`)) + 
+  geom_bar(width = 0.40, color="#e9ecef", alpha=0.6, position = position_dodge(0.40)) +
+  geom_hline(aes(yintercept = mean(`Weight gain(Y/N)`)), color = "coral", linetype = "dashed", size = 1) +
+  scale_fill_manual(values=c("#69b3a2", "#404080"), labels = c('No PCOS', 'PCOS')) + 
+  xlab("# of Patients") + 
+  ylab("Skin Darkening") + 
+  ggtitle("Number of Patients Experiencing Skin Darkening") + 
+  labs(fill = "")
+
+
+```
+
